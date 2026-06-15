@@ -15,12 +15,15 @@ function App() {
     async function loadActiveDrivers() {
       setLoading(true);
       try {
-        const res = await apiFetch('/drivers/active');
+        const res = await apiFetch('/drivers');
         const data = await res.json();
         if (!mounted) return;
-        if (Array.isArray(data)) setActiveDrivers(data);
-        else if (Array.isArray(data.drivers)) setActiveDrivers(data.drivers);
-        else setActiveDrivers([]);
+        const allDrivers = Array.isArray(data) ? data : Array.isArray(data.drivers) ? data.drivers : [];
+        const available = allDrivers.filter((d) => {
+          const s = (d && d.status) ? String(d.status).trim().toLowerCase() : '';
+          return s === 'available';
+        });
+        setActiveDrivers(available);
       } catch (err) {
         console.error('Error loading active drivers', err);
         if (mounted) setActiveDrivers([]);
