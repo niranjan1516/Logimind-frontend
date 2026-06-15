@@ -1,10 +1,37 @@
+import React, { useEffect, useState } from 'react';
 import { Activity, Map, TrendingUp, ClipboardList, List } from 'lucide-react';
+import { apiFetch } from './lib/api';
 import DemandChart from './components/DemandChart';
 import LiveMap from './components/LiveMap';
 import OrderTable from './components/OrderTable';
 import DispatchForm from './components/DispatchForm';
 
 function App() {
+  const [activeDrivers, setActiveDrivers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadActiveDrivers() {
+      setLoading(true);
+      try {
+        const res = await apiFetch('/drivers/active');
+        const data = await res.json();
+        if (!mounted) return;
+        if (Array.isArray(data)) setActiveDrivers(data);
+        else if (Array.isArray(data.drivers)) setActiveDrivers(data.drivers);
+        else setActiveDrivers([]);
+      } catch (err) {
+        console.error('Error loading active drivers', err);
+        if (mounted) setActiveDrivers([]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    loadActiveDrivers();
+    return () => { mounted = false; };
+  }, []);
+
   return (
     <div className="min-h-screen p-6 flex flex-col gap-6 bg-slate-900 text-white font-sans">
       {/* Header */}
@@ -48,13 +75,17 @@ function App() {
             </p>
           </div>
 
-          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-lg">
+           <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-lg">
              <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">Active Drivers</h3>
-             <p className="text-4xl font-bold text-white mt-1">1</p>
+             <p className="text-4xl font-bold text-white mt-1">{activeDrivers.length}</p>
              <div className="mt-4 h-2 w-full bg-slate-700 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 w-1/3"></div>
+               <div
+                className="h-full bg-blue-500"
+                style={{ width: `${Math.min(100, Math.round((activeDrivers.length / 20) * 100))}%` }}
+               ></div>
              </div>
-          </div>
+             <p className="text-xs text-slate-400 mt-2 italic">{loading ? 'Loading...' : `${activeDrivers.length} drivers currently active`}</p>
+           </div>
         </div>
 
       </div>
