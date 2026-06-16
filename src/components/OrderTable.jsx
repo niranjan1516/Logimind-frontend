@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { apiFetch } from '../lib/api';
 
 const STATUS_STYLES = {
@@ -16,9 +16,15 @@ const OrderTable = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Use a ref to track loading state across effect executions safely
+  const isInitialLoad = useRef(true);
 
-  // Function to fetch live orders from the PostgreSQL database
-  const fetchOrders = async () => {
+  // Memoize fetchOrders with useCallback so it doesn't break dependencies
+  const fetchOrders = useCallback(async () => {
+    // Production Safety: Do not make network requests if the user isn't looking at the page
+    if (document.hidden) return;
+
     try {
       const response = await apiFetch('/orders/active');
       const data = await response.json();
@@ -28,19 +34,35 @@ const OrderTable = () => {
       console.error("Failed to fetch active orders:", error);
       setError('Unable to load active dispatches.');
     } finally {
-      setLoading(false);
+      if (isInitialLoad.current) {
+        setLoading(false);
+        isInitialLoad.current = false;
+      }
     }
-  };
-
-  // Fetch on mount, and then poll every 5 seconds to keep the board fresh
-  useEffect(() => {
-    const initialFetch = setTimeout(fetchOrders, 0);
-    const interval = setInterval(fetchOrders, 5000);
-    return () => {
-      clearTimeout(initialFetch);
-      clearInterval(interval);
-    };
   }, []);
+
+  useEffect(() => {
+    // 1. Fire immediately on component mount
+    fetchOrders();
+
+    // 2. Set a production-friendly 15-second heartbeat loop
+    const POLLING_INTERVAL_MS = 15000;
+    const intervalId = setInterval(fetchOrders, POLLING_INTERVAL_MS);
+
+    // 3. Auto-sync the exact moment the user switches back into this tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchOrders();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // 4. Bulletproof cleanup to prevent concurrent running timers or leaks
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchOrders]);
 
   if (loading) {
     return <div className="text-slate-400 p-4 animate-pulse">Loading manifest data...</div>;
